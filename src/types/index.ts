@@ -129,6 +129,51 @@ export interface Agent {
   mood: number;                // 気分 0-100
   createdBy: 'system' | 'user';
   createdAt: Date;
+  // 記憶システム
+  memories: Memory[];          // 長期記憶
+  dailyContext: DailyContext;  // 今日の会話コンテキスト
+}
+
+// =====================================
+// 記憶システム関連
+// =====================================
+
+// 記憶の重要度
+export type MemoryImportance = 'trivial' | 'normal' | 'important' | 'critical';
+
+// 個別の記憶
+export interface Memory {
+  id: string;
+  content: string;              // 記憶の内容
+  importance: MemoryImportance; // 重要度
+  relatedAgentIds: string[];    // 関連するエージェントID
+  createdAt: Date;              // 記憶が作られた日時
+  dayNumber: number;            // 何日目の記憶か
+  emotion?: string;             // その時の感情
+}
+
+// 1日分の会話コンテキスト
+export interface DailyContext {
+  day: number;
+  conversations: ConversationRecord[];
+  summary?: string;             // AIによる1日のサマリー
+}
+
+// 会話記録（コンテキスト用）
+export interface ConversationRecord {
+  id: string;
+  participants: string[];       // 参加者のエージェントID
+  participantNames: string[];   // 参加者の名前
+  messages: {
+    speakerId: string;
+    speakerName: string;
+    content: string;
+    timestamp: Date;
+  }[];
+  locationId: string;
+  locationName: string;
+  startedAt: Date;
+  endedAt?: Date;
 }
 
 // =====================================
@@ -142,6 +187,7 @@ export interface Message {
   agentName: string;
   content: string;
   timestamp: Date;
+  gameTime?: GameTime;          // ゲーム内時間
   locationId: string;
   type: 'speech' | 'thought' | 'action';
 }

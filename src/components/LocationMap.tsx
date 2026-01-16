@@ -3,29 +3,29 @@
 import { useStore } from '@/stores/useStore';
 import type { Agent, Building, LocationFeature } from '@/types';
 
-// 各フィーチャーのアイコン
+// 各フィーチャーのアイコン（ドット絵風）
 const featureIcons: Record<LocationFeature['type'], string> = {
-  bench: '🪑',
-  tree: '🌳',
-  fountain: '⛲',
-  lamp: '🏮',
-  flower: '🌸',
-  sign: '📍',
-  vending_machine: '🥤',
-  trash_can: '🗑️',
+  bench: '■',
+  tree: '♣',
+  fountain: '◆',
+  lamp: '○',
+  flower: '✿',
+  sign: '!',
+  vending_machine: '▣',
+  trash_can: '□',
 };
 
 // 建物タイプのアイコン
 const buildingIcons: Record<Building['type'], string> = {
-  apartment: '🏢',
-  office_building: '🏙️',
-  convenience_store: '🏪',
-  restaurant: '🍽️',
-  cafe: '☕',
-  supermarket: '🛒',
-  station: '🚉',
-  park: '🌳',
-  shop: '🛍️',
+  apartment: '▓',
+  office_building: '█',
+  convenience_store: '▒',
+  restaurant: '▤',
+  cafe: '▥',
+  supermarket: '▦',
+  station: '▧',
+  park: '♣',
+  shop: '▨',
 };
 
 interface AgentMarkerProps {
@@ -35,96 +35,105 @@ interface AgentMarkerProps {
 }
 
 function AgentMarker({ agent, isSelected, onClick }: AgentMarkerProps) {
-  const statusColors: Record<string, string> = {
-    idle: 'bg-gray-100',
-    walking: 'bg-blue-100',
-    talking: 'bg-green-100',
-    thinking: 'bg-yellow-100',
-    working: 'bg-orange-100',
-    eating: 'bg-pink-100',
-    shopping: 'bg-purple-100',
-    sleeping: 'bg-indigo-100',
-    commuting: 'bg-cyan-100',
-  };
-
   return (
     <div
-      className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 ${
-        isSelected ? 'scale-125 z-30' : 'z-20'
+      className={`agent-sprite ${agent.status === 'talking' ? 'talking' : ''} ${
+        isSelected ? 'ring-2 ring-yellow-400 ring-offset-2' : ''
       }`}
-      style={{ left: agent.position.x, top: agent.position.y }}
-      onClick={onClick}
-    >
-      {/* 吹き出し（話している時） */}
-      {agent.status === 'talking' && agent.currentAction && (
-        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-white rounded-lg px-3 py-1 shadow-lg text-sm max-w-52 whitespace-nowrap overflow-hidden text-ellipsis border">
-          {agent.currentAction}
-          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white" />
-        </div>
-      )}
-
-      {/* エージェントのアバター */}
-      <div
-        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-lg border-4 ${statusColors[agent.status] || 'bg-gray-100'} ${
-          isSelected ? 'ring-4 ring-yellow-400' : ''
-        }`}
-        style={{ backgroundColor: agent.color, borderColor: agent.color }}
-      >
-        {agent.persona.name.charAt(0)}
-      </div>
-
-      {/* 名前タグ */}
-      <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
-        {agent.persona.name}
-      </div>
-
-      {/* ステータスインジケーター */}
-      {agent.status !== 'idle' && (
-        <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white flex items-center justify-center text-xs shadow">
-          {agent.status === 'walking' && '🚶'}
-          {agent.status === 'talking' && '💬'}
-          {agent.status === 'thinking' && '💭'}
-          {agent.status === 'working' && '💼'}
-          {agent.status === 'eating' && '🍽️'}
-          {agent.status === 'shopping' && '🛍️'}
-          {agent.status === 'sleeping' && '😴'}
-          {agent.status === 'commuting' && '🚃'}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BuildingMarker({ building }: { building: Building }) {
-  return (
-    <div
-      className="absolute rounded-lg shadow-md flex flex-col items-center justify-center cursor-pointer hover:shadow-lg transition-shadow"
       style={{
-        left: building.position.x,
-        top: building.position.y,
-        width: building.size.width,
-        height: building.size.height,
-        backgroundColor: building.color,
+        left: agent.position.x,
+        top: agent.position.y,
+        backgroundColor: agent.color,
         transform: 'translate(-50%, -50%)',
       }}
-      title={building.name}
+      onClick={onClick}
     >
-      <span className="text-2xl">{buildingIcons[building.type]}</span>
-      <span className="text-xs text-white font-medium text-center px-1 mt-1 drop-shadow-md leading-tight">
-        {building.name.length > 12 ? building.name.slice(0, 12) + '...' : building.name}
-      </span>
-      {building.floors && (
-        <span className="text-xs text-white/70">{building.floors}F</span>
-      )}
+      {agent.persona.name.charAt(0)}
     </div>
   );
 }
 
-function FeatureMarker({ feature }: { feature: LocationFeature }) {
+function RetroBuilding({ building }: { building: Building }) {
+  // タイル数を計算
+  const tilesX = Math.floor(building.size.width / 32);
+  const tilesY = Math.floor(building.size.height / 32);
+
   return (
     <div
-      className="absolute transform -translate-x-1/2 -translate-y-1/2 text-2xl select-none z-10"
-      style={{ left: feature.position.x, top: feature.position.y }}
+      className="absolute"
+      style={{
+        left: building.position.x - building.size.width / 2,
+        top: building.position.y - building.size.height / 2,
+        width: building.size.width,
+        height: building.size.height,
+      }}
+    >
+      {/* 建物本体 */}
+      <div
+        className="w-full h-full border-3 flex flex-col items-center justify-center cursor-pointer
+          hover:brightness-110 transition-all"
+        style={{
+          backgroundColor: building.color,
+          borderColor: '#202020',
+          borderWidth: '3px',
+          imageRendering: 'pixelated',
+        }}
+        title={building.name}
+      >
+        {/* 屋根（複数階の場合） */}
+        {building.floors && building.floors > 1 && (
+          <div
+            className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-3/4 h-2"
+            style={{ backgroundColor: '#a05030', borderRadius: '2px 2px 0 0' }}
+          />
+        )}
+        {/* ドア */}
+        <div
+          className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-6 h-8"
+          style={{ backgroundColor: '#6b4423' }}
+        />
+        {/* 窓 */}
+        {tilesY > 1 && (
+          <div className="flex gap-2 mb-4">
+            <div className="w-4 h-4 bg-blue-200 border border-gray-600" />
+            <div className="w-4 h-4 bg-blue-200 border border-gray-600" />
+          </div>
+        )}
+        {/* 名前 */}
+        <span className="text-xs font-bold text-white drop-shadow-[1px_1px_0_#000] text-center px-1 leading-tight">
+          {building.name.length > 8 ? building.name.slice(0, 8) : building.name}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function RetroFeature({ feature }: { feature: LocationFeature }) {
+  const featureStyles: Record<LocationFeature['type'], { bg: string; color: string }> = {
+    tree: { bg: '#228b22', color: '#90ee90' },
+    bench: { bg: '#8b4513', color: '#d2691e' },
+    fountain: { bg: '#4169e1', color: '#87cefa' },
+    lamp: { bg: '#ffd700', color: '#fff' },
+    flower: { bg: '#ff69b4', color: '#ffb6c1' },
+    sign: { bg: '#ff6347', color: '#fff' },
+    vending_machine: { bg: '#ff4500', color: '#fff' },
+    trash_can: { bg: '#696969', color: '#a9a9a9' },
+  };
+
+  const style = featureStyles[feature.type];
+
+  return (
+    <div
+      className="absolute w-8 h-8 flex items-center justify-center font-bold text-lg select-none"
+      style={{
+        left: feature.position.x,
+        top: feature.position.y,
+        transform: 'translate(-50%, -50%)',
+        backgroundColor: style.bg,
+        color: style.color,
+        border: '2px solid #202020',
+        imageRendering: 'pixelated',
+      }}
       title={feature.name || feature.type}
     >
       {featureIcons[feature.type]}
@@ -133,66 +142,74 @@ function FeatureMarker({ feature }: { feature: LocationFeature }) {
 }
 
 export default function LocationMap() {
-  const { currentLocation, agents, selectedAgentId, selectAgent } = useStore();
+  const { currentLocation, agents, selectedAgentId, selectAgent, simulation } = useStore();
 
   // 現在のロケーションにいるエージェントのみ表示
   const agentsInLocation = agents.filter(
     (a) => a.currentLocationId === currentLocation.id
   );
 
+  // 時間帯によるフィルター
+  const timeFilter = {
+    morning: 'brightness(1.1) saturate(0.9)',
+    afternoon: 'brightness(1.0)',
+    evening: 'brightness(0.85) sepia(0.3)',
+    night: 'brightness(0.5) saturate(0.7)',
+  }[simulation.gameTime.timeOfDay];
+
+  // 地面のタイルパターンを生成
+  const groundPattern = currentLocation.type === 'park'
+    ? 'linear-gradient(45deg, #6b8e23 25%, #7cba3d 25%, #7cba3d 50%, #6b8e23 50%, #6b8e23 75%, #7cba3d 75%)'
+    : currentLocation.type === 'residential'
+    ? 'linear-gradient(45deg, #c8b88c 25%, #d4c9a0 25%, #d4c9a0 50%, #c8b88c 50%, #c8b88c 75%, #d4c9a0 75%)'
+    : 'linear-gradient(45deg, #a0a0a0 25%, #b0b0b0 25%, #b0b0b0 50%, #a0a0a0 50%, #a0a0a0 75%, #b0b0b0 75%)';
+
   return (
-    <div className="relative w-full h-full overflow-hidden">
-      {/* 背景 */}
+    <div
+      className="retro-ui relative w-full h-full overflow-hidden"
+      style={{ filter: timeFilter }}
+    >
+      {/* タイル状の地面 */}
       <div
         className="absolute inset-0"
         style={{
           backgroundColor: currentLocation.backgroundColor,
-          backgroundImage: currentLocation.type === 'park'
-            ? `radial-gradient(circle at 20% 80%, rgba(34, 139, 34, 0.3) 0%, transparent 25%),
-               radial-gradient(circle at 80% 20%, rgba(34, 139, 34, 0.2) 0%, transparent 30%)`
-            : currentLocation.type === 'commercial' || currentLocation.type === 'office'
-            ? `linear-gradient(45deg, rgba(0,0,0,0.02) 25%, transparent 25%),
-               linear-gradient(-45deg, rgba(0,0,0,0.02) 25%, transparent 25%)`
-            : 'none',
+          backgroundImage: groundPattern,
+          backgroundSize: '32px 32px',
+          imageRendering: 'pixelated',
         }}
-      >
-        {/* グリッドパターン（街用） */}
-        {(currentLocation.type === 'commercial' || currentLocation.type === 'office' || currentLocation.type === 'station') && (
+      />
+
+      {/* 道路（商業・オフィス地区） */}
+      {(currentLocation.type === 'commercial' || currentLocation.type === 'office' || currentLocation.type === 'station') && (
+        <div
+          className="absolute left-0 right-0 h-16"
+          style={{
+            top: '50%',
+            transform: 'translateY(-50%)',
+            backgroundColor: '#505050',
+            borderTop: '4px solid #fff',
+            borderBottom: '4px solid #fff',
+          }}
+        >
+          {/* 道路の中央線 */}
           <div
-            className="absolute inset-0 opacity-20"
+            className="absolute top-1/2 left-0 right-0 h-1 transform -translate-y-1/2"
             style={{
-              backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)',
-              backgroundSize: '80px 80px',
+              backgroundImage: 'repeating-linear-gradient(90deg, #fff 0px, #fff 20px, transparent 20px, transparent 40px)',
             }}
           />
-        )}
-      </div>
-
-      {/* ロケーション名 */}
-      <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg z-40">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">
-            {currentLocation.type === 'commercial' && '🏙️'}
-            {currentLocation.type === 'residential' && '🏘️'}
-            {currentLocation.type === 'office' && '🏢'}
-            {currentLocation.type === 'park' && '🌳'}
-            {currentLocation.type === 'station' && '🚉'}
-          </span>
-          <div>
-            <h2 className="font-bold text-lg">{currentLocation.name}</h2>
-            <p className="text-sm text-gray-600">{currentLocation.description}</p>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* 建物 */}
       {currentLocation.buildings.map((building) => (
-        <BuildingMarker key={building.id} building={building} />
+        <RetroBuilding key={building.id} building={building} />
       ))}
 
-      {/* フィーチャー（ベンチ、木など） */}
+      {/* フィーチャー */}
       {currentLocation.features.map((feature) => (
-        <FeatureMarker key={feature.id} feature={feature} />
+        <RetroFeature key={feature.id} feature={feature} />
       ))}
 
       {/* エージェント */}
@@ -205,10 +222,27 @@ export default function LocationMap() {
         />
       ))}
 
-      {/* 現在地にいるエージェント数 */}
-      <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg z-40">
-        <span className="text-sm text-gray-600">
-          👥 この場所: <strong>{agentsInLocation.length}</strong>人
+      {/* ロケーション名（レトロボックス） */}
+      <div className="absolute top-3 left-3 retro-box z-40">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">
+            {currentLocation.type === 'commercial' && '▓'}
+            {currentLocation.type === 'residential' && '▒'}
+            {currentLocation.type === 'office' && '█'}
+            {currentLocation.type === 'park' && '♣'}
+            {currentLocation.type === 'station' && '▧'}
+          </span>
+          <div>
+            <div className="font-bold">{currentLocation.name}</div>
+            <div className="text-xs text-gray-600">{currentLocation.description}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* エージェント数表示 */}
+      <div className="absolute bottom-3 left-3 retro-box-simple z-40">
+        <span className="text-sm">
+          ▸ {agentsInLocation.length}人がいる
         </span>
       </div>
     </div>

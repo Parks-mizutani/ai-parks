@@ -3,29 +3,29 @@
 import { useStore } from '@/stores/useStore';
 import type { Agent } from '@/types';
 
-// ステータスの日本語表示
+// ステータスの日本語表示（レトロ風）
 const statusLabels: Record<string, string> = {
-  idle: '待機中',
-  walking: '移動中',
-  talking: '会話中',
-  thinking: '考え中',
-  working: '仕事中',
-  eating: '食事中',
-  shopping: '買い物中',
-  sleeping: '睡眠中',
-  commuting: '通勤中',
+  idle: 'たいき',
+  walking: 'いどう',
+  talking: 'かいわ',
+  thinking: 'しこう',
+  working: 'しごと',
+  eating: 'しょくじ',
+  shopping: 'かいもの',
+  sleeping: 'すいみん',
+  commuting: 'つうきん',
 };
 
-const statusEmojis: Record<string, string> = {
-  idle: '😊',
-  walking: '🚶',
-  talking: '💬',
-  thinking: '💭',
-  working: '💼',
-  eating: '🍽️',
-  shopping: '🛍️',
-  sleeping: '😴',
-  commuting: '🚃',
+const statusIcons: Record<string, string> = {
+  idle: '○',
+  walking: '→',
+  talking: '♪',
+  thinking: '?',
+  working: '■',
+  eating: '◇',
+  shopping: '★',
+  sleeping: '～',
+  commuting: '⇒',
 };
 
 export default function AgentPanel() {
@@ -38,14 +38,14 @@ export default function AgentPanel() {
 
   if (!selectedAgent) {
     return (
-      <div className="h-full bg-gray-50 p-4 flex flex-col">
-        <h3 className="font-bold text-gray-800 mb-4">エージェント一覧</h3>
+      <div className="retro-ui h-full p-2 flex flex-col" style={{ backgroundColor: '#f8f8f8' }}>
+        <div className="retro-title mb-2">エージェント</div>
 
         {/* この場所にいるエージェント */}
         {agentsHere.length > 0 && (
-          <div className="mb-4">
-            <p className="text-xs text-gray-500 mb-2">📍 {currentLocation.name}にいる</p>
-            <div className="space-y-2">
+          <div className="mb-3">
+            <p className="text-xs mb-1">▸ {currentLocation.name}</p>
+            <div className="space-y-1">
               {agentsHere.map((agent) => (
                 <AgentCard key={agent.id} agent={agent} onClick={() => selectAgent(agent.id)} />
               ))}
@@ -56,8 +56,8 @@ export default function AgentPanel() {
         {/* 他の場所にいるエージェント */}
         {agentsElsewhere.length > 0 && (
           <div>
-            <p className="text-xs text-gray-500 mb-2">🗺️ 他の場所にいる</p>
-            <div className="space-y-2">
+            <p className="text-xs mb-1 text-gray-500">▸ ほかのばしょ</p>
+            <div className="space-y-1">
               {agentsElsewhere.map((agent) => {
                 const loc = locations.find((l) => l.id === agent.currentLocationId);
                 return (
@@ -82,111 +82,93 @@ export default function AgentPanel() {
     : null;
   const currentLoc = locations.find((l) => l.id === selectedAgent.currentLocationId);
 
+  // エネルギーバーの色
+  const energyColor = selectedAgent.energy > 50 ? '#30c030' : selectedAgent.energy > 25 ? '#f8d830' : '#f83030';
+  const moodColor = selectedAgent.mood > 50 ? '#30c030' : selectedAgent.mood > 25 ? '#f8d830' : '#f83030';
+
   return (
-    <div className="h-full bg-gray-50 p-4 flex flex-col overflow-y-auto">
+    <div className="retro-ui h-full p-2 flex flex-col overflow-y-auto" style={{ backgroundColor: '#f8f8f8' }}>
       {/* 戻るボタン */}
       <button
         onClick={() => selectAgent(null)}
-        className="text-sm text-gray-500 hover:text-gray-700 mb-4 text-left"
+        className="retro-button text-xs py-1 px-2 mb-2 self-start"
       >
-        ← 一覧に戻る
+        ◀ もどる
       </button>
 
       {/* プロフィールヘッダー */}
-      <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-        <div className="flex items-center gap-4 mb-4">
+      <div className="retro-box-simple mb-2">
+        <div className="flex items-center gap-3 mb-3">
           <div
-            className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-md"
-            style={{ backgroundColor: selectedAgent.color }}
+            className="w-12 h-12 flex items-center justify-center text-white text-xl font-bold"
+            style={{
+              backgroundColor: selectedAgent.color,
+              border: '3px solid #202020',
+            }}
           >
             {selectedAgent.persona.name.charAt(0)}
           </div>
           <div>
-            <h2 className="text-xl font-bold">{selectedAgent.persona.name}</h2>
-            <p className="text-gray-600">{selectedAgent.persona.age}歳 / {selectedAgent.persona.occupation}</p>
-            <span
-              className={`inline-block px-2 py-0.5 rounded-full text-xs mt-1 ${
-                selectedAgent.createdBy === 'user'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              {selectedAgent.createdBy === 'user' ? 'ユーザー作成' : 'システム'}
-            </span>
+            <div className="font-bold text-lg">{selectedAgent.persona.name}</div>
+            <div className="text-sm text-gray-600">
+              {selectedAgent.persona.age}さい / {selectedAgent.persona.occupation}
+            </div>
           </div>
         </div>
 
-        {/* エネルギーと気分 */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        {/* エネルギーと気分（HP/EXPバー風） */}
+        <div className="space-y-2 mb-3">
           <div>
             <div className="flex justify-between text-xs mb-1">
-              <span>⚡ エネルギー</span>
-              <span>{selectedAgent.energy}%</span>
+              <span>HP</span>
+              <span>{selectedAgent.energy}/100</span>
             </div>
-            <div className="h-2 bg-gray-200 rounded-full">
+            <div className="retro-progress">
               <div
-                className="h-full bg-yellow-400 rounded-full transition-all"
-                style={{ width: `${selectedAgent.energy}%` }}
+                className="retro-progress-fill"
+                style={{ width: `${selectedAgent.energy}%`, backgroundColor: energyColor }}
               />
             </div>
           </div>
           <div>
             <div className="flex justify-between text-xs mb-1">
-              <span>😊 気分</span>
-              <span>{selectedAgent.mood}%</span>
+              <span>きぶん</span>
+              <span>{selectedAgent.mood}/100</span>
             </div>
-            <div className="h-2 bg-gray-200 rounded-full">
+            <div className="retro-progress">
               <div
-                className="h-full bg-pink-400 rounded-full transition-all"
-                style={{ width: `${selectedAgent.mood}%` }}
+                className="retro-progress-fill"
+                style={{ width: `${selectedAgent.mood}%`, backgroundColor: moodColor }}
               />
             </div>
           </div>
         </div>
 
-        <div className="space-y-3 text-sm">
-          <div>
-            <h4 className="font-medium text-gray-500">性格</h4>
-            <p className="text-gray-800">{selectedAgent.persona.personality}</p>
-          </div>
-          <div>
-            <h4 className="font-medium text-gray-500">背景</h4>
-            <p className="text-gray-800">{selectedAgent.persona.background}</p>
-          </div>
-          <div>
-            <h4 className="font-medium text-gray-500">話し方</h4>
-            <p className="text-gray-800">{selectedAgent.persona.speakingStyle}</p>
-          </div>
-          <div>
-            <h4 className="font-medium text-gray-500">目標</h4>
-            <ul className="list-disc list-inside text-gray-800">
-              {selectedAgent.persona.goals.map((goal, i) => (
-                <li key={i}>{goal}</li>
-              ))}
-            </ul>
+        <div className="space-y-2 text-xs">
+          <div className="border-t border-dashed border-gray-400 pt-2">
+            <span className="text-gray-500">せいかく:</span>
+            <p className="mt-1">{selectedAgent.persona.personality}</p>
           </div>
         </div>
       </div>
 
       {/* 生活情報 */}
-      <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-        <h3 className="font-medium text-gray-800 mb-3">🏠 生活</h3>
-        <div className="space-y-2 text-sm">
+      <div className="retro-box-simple mb-2">
+        <div className="text-xs font-bold mb-2">▸ せいかつ</div>
+        <div className="space-y-1 text-xs">
           <div className="flex justify-between">
-            <span className="text-gray-500">自宅</span>
-            <span className="font-medium">{homeLocation?.name || '不明'}</span>
+            <span className="text-gray-500">じたく</span>
+            <span>{homeLocation?.name || 'ふめい'}</span>
           </div>
           {workLocation && (
             <>
               <div className="flex justify-between">
-                <span className="text-gray-500">職場</span>
-                <span className="font-medium">{workLocation.name}</span>
+                <span className="text-gray-500">しょくば</span>
+                <span>{workLocation.name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">勤務時間</span>
-                <span className="font-medium">
-                  {selectedAgent.life.workStartHour}:00 - {selectedAgent.life.workEndHour}:00
-                </span>
+                <span className="text-gray-500">きんむ</span>
+                <span>{selectedAgent.life.workStartHour}:00-{selectedAgent.life.workEndHour}:00</span>
               </div>
             </>
           )}
@@ -194,43 +176,60 @@ export default function AgentPanel() {
       </div>
 
       {/* 現在の状態 */}
-      <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-        <h3 className="font-medium text-gray-800 mb-3">📍 現在の状態</h3>
-        <div className="space-y-2 text-sm">
+      <div className="retro-box-simple mb-2">
+        <div className="text-xs font-bold mb-2">▸ いま</div>
+        <div className="space-y-1 text-xs">
           <div className="flex justify-between">
-            <span className="text-gray-500">場所</span>
-            <span className="font-medium">{currentLoc?.name || '不明'}</span>
+            <span className="text-gray-500">ばしょ</span>
+            <span>{currentLoc?.name || 'ふめい'}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">ステータス</span>
-            <span className="font-medium">
-              {statusEmojis[selectedAgent.status]} {statusLabels[selectedAgent.status]}
+            <span className="text-gray-500">じょうたい</span>
+            <span>
+              {statusIcons[selectedAgent.status]} {statusLabels[selectedAgent.status]}
             </span>
           </div>
         </div>
         {selectedAgent.currentAction && (
-          <p className="mt-2 text-gray-600 italic text-sm">"{selectedAgent.currentAction}"</p>
+          <p className="mt-2 text-gray-600 text-xs border-t border-dashed border-gray-300 pt-2">
+            「{selectedAgent.currentAction}」
+          </p>
         )}
       </div>
+
+      {/* 記憶（メモリー）表示 */}
+      {selectedAgent.memories.length > 0 && (
+        <div className="retro-box-simple mb-2">
+          <div className="text-xs font-bold mb-2">▸ きおく ({selectedAgent.memories.length})</div>
+          <div className="space-y-1 text-xs max-h-24 overflow-y-auto">
+            {selectedAgent.memories.slice(-3).map((memory) => (
+              <div key={memory.id} className="border-b border-dashed border-gray-300 pb-1">
+                <span className="text-gray-400">Day{memory.dayNumber}:</span> {memory.content}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 削除ボタン */}
       {selectedAgent.createdBy === 'user' && (
         <button
           onClick={() => {
-            if (confirm(`${selectedAgent.persona.name}を削除しますか？`)) {
+            if (confirm(`${selectedAgent.persona.name}を さくじょしますか？`)) {
               removeAgent(selectedAgent.id);
             }
           }}
-          className="mt-auto bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-lg transition-colors text-sm"
+          className="retro-button mt-auto text-xs"
+          style={{ color: '#f83030' }}
         >
-          このエージェントを削除
+          さくじょする
         </button>
       )}
     </div>
   );
 }
 
-// エージェントカードコンポーネント
+// エージェントカードコンポーネント（レトロ風）
 function AgentCard({
   agent,
   onClick,
@@ -243,29 +242,28 @@ function AgentCard({
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-lg p-3 cursor-pointer hover:shadow-md transition-shadow border border-gray-200"
+      className="retro-menu-item p-2 cursor-pointer border-2 border-black bg-white"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-          style={{ backgroundColor: agent.color }}
+          className="w-8 h-8 flex items-center justify-center text-white font-bold text-sm"
+          style={{
+            backgroundColor: agent.color,
+            border: '2px solid #202020',
+          }}
         >
           {agent.persona.name.charAt(0)}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-medium truncate">{agent.persona.name}</p>
-          <p className="text-xs text-gray-500">
+          <p className="font-bold text-sm truncate">{agent.persona.name}</p>
+          <p className="text-xs text-gray-500 truncate">
             {agent.persona.occupation}
-            {locationName && ` • ${locationName}`}
+            {locationName && ` ・${locationName}`}
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-sm">
-            {statusEmojis[agent.status]}
-          </div>
-          <div className="text-xs text-gray-400">
-            {statusLabels[agent.status]}
-          </div>
+        <div className="text-right text-xs">
+          <div>{statusIcons[agent.status]}</div>
+          <div className="text-gray-400">{statusLabels[agent.status]}</div>
         </div>
       </div>
     </div>

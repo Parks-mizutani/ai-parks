@@ -83,6 +83,8 @@ export default function CreateAgentModal({ isOpen, onClose }: CreateAgentModalPr
       mood: 80,
       createdBy: 'user',
       createdAt: new Date(),
+      memories: [],
+      dailyContext: { day: 1, conversations: [] },
     };
 
     addAgent(newAgent);

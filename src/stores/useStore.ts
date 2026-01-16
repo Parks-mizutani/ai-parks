@@ -10,6 +10,9 @@ import type {
   GameTime,
   TimeOfDay,
   AgentStatus,
+  Memory,
+  DailyContext,
+  ConversationRecord,
 } from '@/types';
 import { allLocations, shibuya } from '@/data/locations';
 
@@ -61,7 +64,18 @@ interface AppState {
   startConversation: (agentIds: string[], location: Position, locationId: string) => string;
   endConversation: (conversationId: string) => void;
   getAgentsInLocation: (locationId: string) => Agent[];
+  // 記憶システム
+  addMemory: (agentId: string, memory: Memory) => void;
+  recordConversation: (record: ConversationRecord) => void;
+  getAgentContext: (agentId: string) => { memories: Memory[]; todayConversations: ConversationRecord[] };
+  processNewDay: (agentId: string, newMemories: Memory[], summary: string) => void;
 }
+
+// 初期の空DailyContext
+const createEmptyDailyContext = (day: number): DailyContext => ({
+  day,
+  conversations: [],
+});
 
 // サンプルエージェント（東京で生活）
 const sampleAgents: Agent[] = [
@@ -93,6 +107,8 @@ const sampleAgents: Agent[] = [
     mood: 75,
     createdBy: 'system',
     createdAt: new Date(),
+    memories: [],
+    dailyContext: createEmptyDailyContext(1),
   },
   {
     id: uuidv4(),
@@ -122,6 +138,8 @@ const sampleAgents: Agent[] = [
     mood: 65,
     createdBy: 'system',
     createdAt: new Date(),
+    memories: [],
+    dailyContext: createEmptyDailyContext(1),
   },
   {
     id: uuidv4(),
@@ -147,6 +165,8 @@ const sampleAgents: Agent[] = [
     mood: 80,
     createdBy: 'system',
     createdAt: new Date(),
+    memories: [],
+    dailyContext: createEmptyDailyContext(1),
   },
   {
     id: uuidv4(),
@@ -176,6 +196,8 @@ const sampleAgents: Agent[] = [
     mood: 85,
     createdBy: 'system',
     createdAt: new Date(),
+    memories: [],
+    dailyContext: createEmptyDailyContext(1),
   },
   {
     id: uuidv4(),
@@ -205,6 +227,8 @@ const sampleAgents: Agent[] = [
     mood: 70,
     createdBy: 'system',
     createdAt: new Date(),
+    memories: [],
+    dailyContext: createEmptyDailyContext(1),
   },
 ];
 
@@ -357,6 +381,66 @@ export const useStore = create<AppState>((set, get) => ({
     const { agents } = get();
     return agents.filter((a) => a.currentLocationId === locationId);
   },
+
+  // 記憶を追加
+  addMemory: (agentId, memory) =>
+    set((state) => ({
+      agents: state.agents.map((a) =>
+        a.id === agentId
+          ? { ...a, memories: [...a.memories, memory] }
+          : a
+      ),
+    })),
+
+  // 会話を今日のコンテキストに記録
+  recordConversation: (record) =>
+    set((state) => ({
+      agents: state.agents.map((a) => {
+        if (record.participants.includes(a.id)) {
+          return {
+            ...a,
+            dailyContext: {
+              ...a.dailyContext,
+              conversations: [...a.dailyContext.conversations, record],
+            },
+          };
+        }
+        return a;
+      }),
+    })),
+
+  // エージェントのコンテキストを取得（AI会話用）
+  getAgentContext: (agentId) => {
+    const { agents } = get();
+    const agent = agents.find((a) => a.id === agentId);
+    if (!agent) {
+      return { memories: [], todayConversations: [] };
+    }
+    return {
+      memories: agent.memories,
+      todayConversations: agent.dailyContext.conversations,
+    };
+  },
+
+  // 新しい日を処理（記憶の抽出とコンテキストのリセット）
+  processNewDay: (agentId, newMemories, summary) =>
+    set((state) => ({
+      agents: state.agents.map((a) => {
+        if (a.id === agentId) {
+          const newDay = state.simulation.gameTime.day;
+          return {
+            ...a,
+            memories: [...a.memories, ...newMemories],
+            dailyContext: {
+              day: newDay,
+              conversations: [],
+              summary: summary,
+            },
+          };
+        }
+        return a;
+      }),
+    })),
 }));
 
 // 後方互換性のためのエイリアス

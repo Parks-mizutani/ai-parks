@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '@/stores/useStore';
-import type { Agent, Position, Message, Location, AgentStatus } from '@/types';
+import type { Agent, Position, Message, Location, AgentStatus, ConversationRecord, Memory } from '@/types';
 import { getLocationById } from '@/data/locations';
 
 // 2点間の距離を計算
@@ -56,6 +56,9 @@ export function useLifeSimulation() {
     updateAgentMood,
     addMessage,
     advanceTime,
+    recordConversation,
+    processNewDay,
+    getAgentContext,
   } = useStore();
 
   // エージェントの目標
@@ -68,8 +71,48 @@ export function useLifeSimulation() {
   const isConversing = useRef<Set<string>>(new Set());
   // 時間進行カウンター
   const timeCounter = useRef(0);
+  // 前回の日付（日付変更検出用）
+  const lastDay = useRef(1);
+  // 記憶抽出処理中フラグ
+  const processingMemories = useRef<Set<string>>(new Set());
 
   const getPairKey = (id1: string, id2: string) => [id1, id2].sort().join('-');
+
+  // 日が変わった時の記憶抽出処理
+  const extractMemories = useCallback(async (agent: Agent, day: number) => {
+    if (processingMemories.current.has(agent.id)) return;
+    processingMemories.current.add(agent.id);
+
+    try {
+      const context = getAgentContext(agent.id);
+      if (context.todayConversations.length === 0) {
+        processingMemories.current.delete(agent.id);
+        return;
+      }
+
+      const response = await fetch('/api/agents/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentName: agent.persona.name,
+          persona: agent.persona,
+          conversations: context.todayConversations,
+          currentDay: day,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const memories: Memory[] = data.memories || [];
+        processNewDay(agent.id, memories, data.summary || '');
+        console.log(`${agent.persona.name}の記憶を抽出:`, memories.length, '件');
+      }
+    } catch (error) {
+      console.error('Memory extraction error:', error);
+    } finally {
+      processingMemories.current.delete(agent.id);
+    }
+  }, [getAgentContext, processNewDay]);
 
   // 時間に基づいてエージェントが何をすべきか決定
   const decideActivity = useCallback((agent: Agent, hour: number): { status: AgentStatus; locationId: string; description: string } => {
@@ -100,7 +143,6 @@ export function useLifeSimulation() {
 
     // 昼食時間（12-13時）
     if (hour === 12 || hour === 13) {
-      // ランダムで外食か自宅
       if (Math.random() < 0.6) {
         return { status: 'eating', locationId: agent.currentLocationId, description: 'ランチ中' };
       }
@@ -115,7 +157,6 @@ export function useLifeSimulation() {
 
     // 買い物（夕方、ランダム）
     if (hour >= 17 && hour <= 21 && Math.random() < 0.2) {
-      // 近くのスーパーやコンビニへ
       return { status: 'shopping', locationId: 'residential-meguro', description: '買い物中' };
     }
 
@@ -125,7 +166,6 @@ export function useLifeSimulation() {
     }
 
     // それ以外: 自由時間
-    // お気に入りの場所に行くか、現在地で過ごす
     if (life.favoriteSpots.length > 0 && Math.random() < 0.3) {
       const spot = life.favoriteSpots[Math.floor(Math.random() * life.favoriteSpots.length)];
       return { status: 'idle', locationId: spot, description: 'お出かけ中' };
@@ -134,11 +174,24 @@ export function useLifeSimulation() {
     return { status: 'idle', locationId: agent.currentLocationId, description: '自由時間' };
   }, []);
 
-  // AI会話生成
+  // AI会話生成（コンテキスト付き）
   const generateAIConversation = useCallback(
     async (agent1: Agent, agent2: Agent) => {
       try {
         const loc = getLocationById(agent1.currentLocationId);
+
+        // エージェントの記憶とコンテキストを取得
+        const context1 = getAgentContext(agent1.id);
+        const context2 = getAgentContext(agent2.id);
+
+        // 記憶をコンテキストテキストに変換
+        const memories1 = context1.memories.slice(-5).map(m => m.content).join('. ');
+        const memories2 = context2.memories.slice(-5).map(m => m.content).join('. ');
+
+        // 今日の会話サマリー
+        const todayConvs1 = context1.todayConversations.length;
+        const todayConvs2 = context2.todayConversations.length;
+
         const response = await fetch('/api/agents/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -147,6 +200,12 @@ export function useLifeSimulation() {
             park: loc,
             recentMessages: chatLog.slice(-10),
             situation: `${agent1.persona.name}（${agent1.persona.occupation}）と${agent2.persona.name}（${agent2.persona.occupation}）が${loc?.name || '街'}で出会いました。`,
+            context: {
+              agent1Memories: memories1,
+              agent2Memories: memories2,
+              agent1TodayConvCount: todayConvs1,
+              agent2TodayConvCount: todayConvs2,
+            },
           }),
         });
         if (response.ok) {
@@ -158,7 +217,7 @@ export function useLifeSimulation() {
       }
       return null;
     },
-    [chatLog]
+    [chatLog, getAgentContext]
   );
 
   // シンプル会話生成
@@ -184,7 +243,7 @@ export function useLifeSimulation() {
     []
   );
 
-  // 会話実行
+  // 会話実行（コンテキストに記録）
   const executeConversation = useCallback(
     async (agent: Agent, partner: Agent, useAI: boolean) => {
       if (isConversing.current.has(agent.id) || isConversing.current.has(partner.id)) return;
@@ -193,6 +252,11 @@ export function useLifeSimulation() {
       isConversing.current.add(partner.id);
 
       const loc = getLocationById(agent.currentLocationId);
+      const conversationId = uuidv4();
+      const conversationStartTime = new Date();
+
+      // 会話記録用
+      const conversationMessages: { speakerId: string; speakerName: string; content: string; timestamp: Date }[] = [];
 
       const meetMsg: Message = {
         id: uuidv4(),
@@ -240,6 +304,14 @@ export function useLifeSimulation() {
           };
           addMessage(speechMsg);
           updateAgentStatus(msg.agentId, 'talking', msg.content);
+
+          // 会話記録に追加
+          conversationMessages.push({
+            speakerId: msg.agentId,
+            speakerName: speaker.persona.name,
+            content: msg.content,
+            timestamp: new Date(),
+          });
         }, i * interval);
       });
 
@@ -250,9 +322,23 @@ export function useLifeSimulation() {
         updateAgentStatus(partner.id, 'idle');
         isConversing.current.delete(agent.id);
         isConversing.current.delete(partner.id);
+
         // 会話で気分UP
         updateAgentMood(agent.id, 5);
         updateAgentMood(partner.id, 5);
+
+        // 会話をデイリーコンテキストに記録
+        const record: ConversationRecord = {
+          id: conversationId,
+          participants: [agent.id, partner.id],
+          participantNames: [agent.persona.name, partner.persona.name],
+          messages: conversationMessages,
+          locationId: agent.currentLocationId,
+          locationName: loc?.name || '不明な場所',
+          startedAt: conversationStartTime,
+          endedAt: new Date(),
+        };
+        recordConversation(record);
       }, duration);
 
       const pairKey = getPairKey(agent.id, partner.id);
@@ -260,7 +346,7 @@ export function useLifeSimulation() {
       actionTimers.current.set(agent.id, duration + 1000);
       actionTimers.current.set(partner.id, duration + 1000);
     },
-    [generateAIConversation, generateSimpleConversation, addMessage, updateAgentStatus, updateAgentMood]
+    [generateAIConversation, generateSimpleConversation, addMessage, updateAgentStatus, updateAgentMood, recordConversation]
   );
 
   // メインループ
@@ -274,6 +360,16 @@ export function useLifeSimulation() {
       const { gameTime } = state.simulation;
       const currentAgents = state.agents;
       const currentAIMode = state.aiMode;
+
+      // 日付変更チェック
+      if (gameTime.day > lastDay.current) {
+        console.log(`日が変わりました: Day ${lastDay.current} → Day ${gameTime.day}`);
+        // 全エージェントの記憶抽出
+        currentAgents.forEach((agent) => {
+          extractMemories(agent, gameTime.day);
+        });
+        lastDay.current = gameTime.day;
+      }
 
       // 時間進行（1秒 = 1分）
       timeCounter.current += intervalMs;
@@ -302,7 +398,6 @@ export function useLifeSimulation() {
 
         // ロケーション移動が必要な場合
         if (agent.currentLocationId !== activity.locationId) {
-          // ロケーション移動
           const targetLoc = getLocationById(activity.locationId);
           if (targetLoc) {
             const actionMsg: Message = {
@@ -319,7 +414,7 @@ export function useLifeSimulation() {
             updateAgentLocation(agent.id, activity.locationId);
             updateAgentPosition(agent.id, randomPosition(targetLoc));
             updateAgentStatus(agent.id, activity.status, activity.description);
-            updateAgentEnergy(agent.id, -5); // 移動で疲労
+            updateAgentEnergy(agent.id, -5);
             actionTimers.current.set(agent.id, 3000 / simulation.speed);
           }
           return;
@@ -328,7 +423,7 @@ export function useLifeSimulation() {
         // 睡眠中
         if (activity.status === 'sleeping') {
           updateAgentStatus(agent.id, 'sleeping', '睡眠中');
-          updateAgentEnergy(agent.id, 2); // 回復
+          updateAgentEnergy(agent.id, 2);
           actionTimers.current.set(agent.id, 5000 / simulation.speed);
           return;
         }
@@ -363,8 +458,6 @@ export function useLifeSimulation() {
         const loc = getLocationById(agent.currentLocationId);
 
         if (!goal || goal.type === 'none') {
-          // 新しい目標を設定
-          // 誰かに向かう（50%）
           const otherAgents = currentAgents.filter(
             (o) => o.id !== agent.id && o.currentLocationId === agent.currentLocationId && !isConversing.current.has(o.id)
           );
@@ -376,7 +469,6 @@ export function useLifeSimulation() {
               targetPosition: target.position,
             });
           } else if (loc) {
-            // ランダム移動
             agentGoals.current.set(agent.id, {
               type: 'move_to_position',
               targetPosition: randomPosition(loc),
@@ -387,7 +479,6 @@ export function useLifeSimulation() {
 
         // 目標に向かって移動
         if (goal.targetPosition) {
-          // エージェント追跡の場合は位置更新
           if (goal.type === 'move_to_agent' && goal.targetAgentId) {
             const targetAgent = currentAgents.find((a) => a.id === goal.targetAgentId);
             if (targetAgent && targetAgent.currentLocationId === agent.currentLocationId) {
@@ -400,12 +491,10 @@ export function useLifeSimulation() {
 
           const dist = distance(agent.position, goal.targetPosition);
           if (dist < 10) {
-            // 到達
             agentGoals.current.delete(agent.id);
             updateAgentStatus(agent.id, 'idle');
             actionTimers.current.set(agent.id, 1000 / simulation.speed);
           } else {
-            // 移動
             const newPos = moveTowards(agent.position, goal.targetPosition, 3 * simulation.speed);
             updateAgentPosition(agent.id, newPos);
             updateAgentStatus(agent.id, 'walking');
@@ -421,6 +510,7 @@ export function useLifeSimulation() {
     advanceTime,
     decideActivity,
     executeConversation,
+    extractMemories,
     updateAgentPosition,
     updateAgentStatus,
     updateAgentLocation,
