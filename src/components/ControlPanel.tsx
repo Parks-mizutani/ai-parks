@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useStore } from '@/stores/useStore';
 
 // 時間帯のアイコン（レトロ風）
@@ -10,6 +11,29 @@ const timeIcons = {
   night: '☽',
 };
 
+// API状態チェック
+function useApiStatus() {
+  const [apiConfigured, setApiConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // APIエンドポイントにテストリクエスト
+    fetch('/api/agents/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agents: [], park: { name: 'test' }, test: true }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        // モックレスポンスかどうかでAPIキーの有無を判断
+        const isMock = data.responses?.some((r: { speech?: string }) => r.speech?.includes('考えています'));
+        setApiConfigured(!isMock);
+      })
+      .catch(() => setApiConfigured(false));
+  }, []);
+
+  return apiConfigured;
+}
+
 export default function ControlPanel() {
   const {
     simulation,
@@ -18,11 +42,9 @@ export default function ControlPanel() {
     agents,
     aiMode,
     toggleAIMode,
-    currentLocation,
-    locations,
-    setCurrentLocation,
   } = useStore();
 
+  const apiConfigured = useApiStatus();
   const { gameTime } = simulation;
   const timeStr = `${gameTime.hour.toString().padStart(2, '0')}:${gameTime.minute.toString().padStart(2, '0')}`;
 
@@ -53,25 +75,6 @@ export default function ControlPanel() {
 
         {/* 右側: コントロール */}
         <div className="flex items-center gap-3">
-          {/* ロケーション選択 */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm">ばしょ:</span>
-            <select
-              value={currentLocation.id}
-              onChange={(e) => {
-                const loc = locations.find((l) => l.id === e.target.value);
-                if (loc) setCurrentLocation(loc);
-              }}
-              className="retro-select text-sm"
-            >
-              {locations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* AIモードトグル */}
           <div className="flex items-center gap-2">
             <span className="text-sm">AI:</span>
@@ -80,9 +83,21 @@ export default function ControlPanel() {
               className={`retro-button text-sm py-1 px-3 ${
                 aiMode ? 'bg-black text-white' : ''
               }`}
+              title={apiConfigured === false ? 'GEMINI_API_KEY未設定' : undefined}
             >
               {aiMode ? 'ON' : 'OFF'}
             </button>
+            {/* API状態インジケータ */}
+            {apiConfigured === false && aiMode && (
+              <span className="text-xs text-red-600 animate-pulse" title=".env.localにGEMINI_API_KEYを設定してください">
+                ⚠️ APIキー未設定
+              </span>
+            )}
+            {apiConfigured === true && aiMode && (
+              <span className="text-xs text-green-600">
+                ✓ Gemini
+              </span>
+            )}
           </div>
 
           {/* スピード調整 */}

@@ -4,6 +4,10 @@ import type { Location } from '@/types';
 // 東京の街 - ロケーションデータ
 // =====================================
 
+// ワールドマップでの配置座標
+// 全体サイズ: 3200 x 2400 (conceptual)
+// 左上から: 代々木公園 -> 新宿 -> 渋谷 -> 目黒 という流れ
+
 // 渋谷駅前
 export const shibuya: Location = {
   id: 'shibuya',
@@ -14,6 +18,7 @@ export const shibuya: Location = {
   height: 700,
   backgroundColor: '#D3D3D3',
   connectedTo: ['shibuya-station', 'residential-meguro'],
+  worldPosition: { x: 1200, y: 1400 },
   buildings: [
     {
       id: 'shibuya-109',
@@ -82,6 +87,7 @@ export const shibuyaStation: Location = {
   height: 400,
   backgroundColor: '#E8E8E8',
   connectedTo: ['shibuya', 'shinjuku-station', 'meguro-station'],
+  worldPosition: { x: 1200, y: 800 },
   buildings: [
     {
       id: 'station-building',
@@ -110,6 +116,7 @@ export const residentialMeguro: Location = {
   height: 600,
   backgroundColor: '#98FB98',
   connectedTo: ['meguro-station', 'shibuya'],
+  worldPosition: { x: 2200, y: 1400 },
   buildings: [
     {
       id: 'apartment-sakura',
@@ -178,6 +185,7 @@ export const meguroStation: Location = {
   height: 350,
   backgroundColor: '#E0E0E0',
   connectedTo: ['residential-meguro', 'shibuya-station'],
+  worldPosition: { x: 2200, y: 800 },
   buildings: [
     {
       id: 'meguro-station-building',
@@ -204,6 +212,7 @@ export const shinjukuOffice: Location = {
   height: 700,
   backgroundColor: '#C0C0C0',
   connectedTo: ['shinjuku-station'],
+  worldPosition: { x: 200, y: 800 },
   buildings: [
     {
       id: 'tokyo-building',
@@ -279,6 +288,7 @@ export const shinjukuStation: Location = {
   height: 450,
   backgroundColor: '#E5E5E5',
   connectedTo: ['shinjuku-office', 'shibuya-station', 'yoyogi-park'],
+  worldPosition: { x: 200, y: 200 },
   buildings: [
     {
       id: 'shinjuku-station-building',
@@ -308,6 +318,7 @@ export const yoyogiPark: Location = {
   height: 800,
   backgroundColor: '#228B22',
   connectedTo: ['shinjuku-station', 'shibuya-station'],
+  worldPosition: { x: 1000, y: 0 },
   buildings: [
     {
       id: 'park-cafe',

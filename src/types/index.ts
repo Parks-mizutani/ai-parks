@@ -46,6 +46,7 @@ export interface Location {
   buildings: Building[];
   features: LocationFeature[];
   connectedTo: string[]; // 接続している他のロケーションID
+  worldPosition?: Position; // ワールドマップ上の座標
 }
 
 // 空間内のオブジェクト（装飾）
