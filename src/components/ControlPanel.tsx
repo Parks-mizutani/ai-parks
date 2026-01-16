@@ -3,18 +3,18 @@
 import { useStore } from '@/stores/useStore';
 
 export default function ControlPanel() {
-  const { simulation, toggleSimulation, setSimulationSpeed, agents } = useStore();
+  const { simulation, toggleSimulation, setSimulationSpeed, agents, aiMode, toggleAIMode } = useStore();
 
   return (
     <div className="bg-white border-b px-4 py-3 flex items-center justify-between">
       {/* 左側: タイトルと統計 */}
       <div className="flex items-center gap-6">
         <h1 className="text-xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-          🏞️ AI Parks
+          AI Parks
         </h1>
         <div className="flex items-center gap-4 text-sm text-gray-600">
           <span>
-            👥 エージェント: <strong>{agents.length}</strong>
+            エージェント: <strong>{agents.length}</strong>
           </span>
           <span className={simulation.isRunning ? 'text-green-600' : 'text-gray-400'}>
             {simulation.isRunning ? '● シミュレーション中' : '○ 停止中'}
@@ -24,6 +24,26 @@ export default function ControlPanel() {
 
       {/* 右側: コントロール */}
       <div className="flex items-center gap-4">
+        {/* AIモードトグル */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">AI会話:</span>
+          <button
+            onClick={toggleAIMode}
+            className={`relative w-12 h-6 rounded-full transition-colors ${
+              aiMode ? 'bg-purple-500' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                aiMode ? 'translate-x-6' : ''
+              }`}
+            />
+          </button>
+          <span className={`text-xs ${aiMode ? 'text-purple-600 font-medium' : 'text-gray-400'}`}>
+            {aiMode ? 'ON' : 'OFF'}
+          </span>
+        </div>
+
         {/* スピード調整 */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">速度:</span>

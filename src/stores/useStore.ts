@@ -31,6 +31,8 @@ interface AppState {
   clearChatLog: () => void;
   toggleSimulation: () => void;
   setSimulationSpeed: (speed: number) => void;
+  toggleAIMode: () => void;
+  aiMode: boolean;
   selectAgent: (agentId: string | null) => void;
   startConversation: (agentIds: string[], location: Position) => string;
   endConversation: (conversationId: string) => void;
@@ -123,6 +125,7 @@ export const useStore = create<AppState>((set, get) => ({
     currentTime: new Date(),
   },
   selectedAgentId: null,
+  aiMode: true, // デフォルトでAIモードON
 
   setCurrentPark: (park) => set({ currentPark: park }),
 
@@ -166,6 +169,8 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       simulation: { ...state.simulation, speed },
     })),
+
+  toggleAIMode: () => set((state) => ({ aiMode: !state.aiMode })),
 
   selectAgent: (agentId) => set({ selectedAgentId: agentId }),
 

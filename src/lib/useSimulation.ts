@@ -39,6 +39,8 @@ export function useSimulation() {
     simulation,
     agents,
     currentPark,
+    chatLog,
+    aiMode,
     updateAgentPosition,
     updateAgentStatus,
     addMessage,
@@ -50,10 +52,12 @@ export function useSimulation() {
   const actionTimers = useRef<Map<string, number>>(new Map());
   // 会話クールダウン
   const conversationCooldown = useRef<Map<string, number>>(new Map());
+  // 会話中フラグ（重複防止）
+  const isConversing = useRef<Set<string>>(new Set());
 
   // AIを使った会話生成
   const generateAIConversation = useCallback(
-    async (agent1: Agent, agent2: Agent) => {
+    async (agent1: Agent, agent2: Agent, recentMessages: Message[]) => {
       try {
         const response = await fetch('/api/agents/chat', {
           method: 'POST',
@@ -61,8 +65,8 @@ export function useSimulation() {
           body: JSON.stringify({
             agents: [agent1, agent2],
             park: currentPark,
-            recentMessages: [],
-            situation: `${agent1.persona.name}と${agent2.persona.name}が公園で偶然出会いました。`,
+            recentMessages: recentMessages.slice(-10),
+            situation: `${agent1.persona.name}と${agent2.persona.name}が公園で出会い、会話を始めます。お互いのペルソナに基づいて自然な会話をしてください。`,
           }),
         });
 
@@ -96,7 +100,7 @@ export function useSimulation() {
       ];
 
       const topics = [
-        `最近${agent1.persona.goals[0]}に興味があって...`,
+        `最近${agent1.persona.goals[0] || '色々なこと'}に興味があって...`,
         `${currentPark?.name || 'この公園'}はいいところですね`,
         '何かおすすめはありますか？',
         'お散歩ですか？',
@@ -120,14 +124,134 @@ export function useSimulation() {
     [currentPark]
   );
 
+  // AI思考生成
+  const generateAIThought = useCallback(
+    async (agent: Agent) => {
+      try {
+        const response = await fetch('/api/agents/think', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent,
+            park: currentPark,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.thought;
+        }
+      } catch (error) {
+        console.error('AI thought error:', error);
+      }
+      return null;
+    },
+    [currentPark]
+  );
+
+  // 会話を実行する関数
+  const executeConversation = useCallback(
+    async (agent: Agent, partner: Agent, useAI: boolean) => {
+      // 既に会話中ならスキップ
+      if (isConversing.current.has(agent.id) || isConversing.current.has(partner.id)) {
+        return;
+      }
+
+      isConversing.current.add(agent.id);
+      isConversing.current.add(partner.id);
+
+      updateAgentStatus(agent.id, 'talking');
+      updateAgentStatus(partner.id, 'talking');
+
+      let conversation: { agentId: string; content: string; thought?: string }[] = [];
+
+      if (useAI) {
+        // AI会話を試行
+        const aiResponses = await generateAIConversation(agent, partner, chatLog);
+        if (aiResponses && aiResponses.length > 0) {
+          conversation = aiResponses.map((resp: { agentId: string; speech?: string; thought?: string }) => ({
+            agentId: resp.agentId,
+            content: resp.speech || '',
+            thought: resp.thought,
+          })).filter((c: { content: string }) => c.content);
+        }
+      }
+
+      // AI会話が取得できなかった場合はシンプル会話
+      if (conversation.length === 0) {
+        conversation = generateSimpleConversation(agent, partner);
+      }
+
+      const speed = useStore.getState().simulation.speed;
+      const messageInterval = 2500 / speed;
+
+      // 会話を順番に表示
+      conversation.forEach((msg, index) => {
+        setTimeout(() => {
+          const speaker = [agent, partner].find((a) => a.id === msg.agentId) || agent;
+
+          // 思考があれば先に表示
+          if (msg.thought) {
+            const thoughtMessage: Message = {
+              id: uuidv4(),
+              agentId: speaker.id,
+              agentName: speaker.persona.name,
+              content: msg.thought,
+              timestamp: new Date(),
+              type: 'thought',
+            };
+            addMessage(thoughtMessage);
+          }
+
+          // 発言を表示
+          if (msg.content) {
+            const speechMessage: Message = {
+              id: uuidv4(),
+              agentId: msg.agentId,
+              agentName: speaker.persona.name,
+              content: msg.content,
+              timestamp: new Date(),
+              type: 'speech',
+            };
+            addMessage(speechMessage);
+            updateAgentStatus(msg.agentId, 'talking', msg.content);
+          }
+        }, index * messageInterval);
+      });
+
+      // 会話終了後の処理
+      const conversationDuration = conversation.length * messageInterval + 1000;
+
+      setTimeout(() => {
+        updateAgentStatus(agent.id, 'idle');
+        updateAgentStatus(partner.id, 'idle');
+        isConversing.current.delete(agent.id);
+        isConversing.current.delete(partner.id);
+      }, conversationDuration);
+
+      // クールダウン設定
+      actionTimers.current.set(agent.id, conversationDuration + 2000);
+      actionTimers.current.set(partner.id, conversationDuration + 2000);
+      conversationCooldown.current.set(agent.id, conversationDuration + 8000);
+      conversationCooldown.current.set(partner.id, conversationDuration + 8000);
+    },
+    [generateAIConversation, generateSimpleConversation, chatLog, updateAgentStatus, addMessage]
+  );
+
   // メインのシミュレーションループ
   useEffect(() => {
     if (!simulation.isRunning || !currentPark) return;
 
-    const intervalMs = 100 / simulation.speed; // ベース100ms
+    const intervalMs = 100 / simulation.speed;
 
     const interval = setInterval(() => {
-      agents.forEach((agent) => {
+      const currentAgents = useStore.getState().agents;
+      const currentAIMode = useStore.getState().aiMode;
+
+      currentAgents.forEach((agent) => {
+        // 会話中ならスキップ
+        if (isConversing.current.has(agent.id)) return;
+
         // アクションタイマーを更新
         const timer = actionTimers.current.get(agent.id) || 0;
         if (timer > 0) {
@@ -142,60 +266,26 @@ export function useSimulation() {
         }
 
         // 近くのエージェントを探す
-        const nearbyAgents = agents.filter(
+        const nearbyAgents = currentAgents.filter(
           (other) =>
             other.id !== agent.id &&
-            distance(agent.position, other.position) < 80 &&
+            !isConversing.current.has(other.id) &&
+            distance(agent.position, other.position) < 100 &&
             (conversationCooldown.current.get(other.id) || 0) <= 0
         );
 
         // 行動を決定
         const action = Math.random();
 
-        if (nearbyAgents.length > 0 && action < 0.3 && cooldown <= 0) {
+        if (nearbyAgents.length > 0 && action < 0.25 && cooldown <= 0) {
           // 会話を開始
           const partner = nearbyAgents[Math.floor(Math.random() * nearbyAgents.length)];
-
-          updateAgentStatus(agent.id, 'talking');
-          updateAgentStatus(partner.id, 'talking');
-
-          // 会話を生成（シンプル版）
-          const conversation = generateSimpleConversation(agent, partner);
-
-          conversation.forEach((msg, index) => {
-            setTimeout(() => {
-              const speaker = agents.find((a) => a.id === msg.agentId);
-              if (speaker) {
-                const message: Message = {
-                  id: uuidv4(),
-                  agentId: msg.agentId,
-                  agentName: speaker.persona.name,
-                  content: msg.content,
-                  timestamp: new Date(),
-                  type: 'speech',
-                };
-                addMessage(message);
-                updateAgentStatus(msg.agentId, 'talking', msg.content);
-              }
-            }, index * 2000 / simulation.speed);
-          });
-
-          // 会話後のクールダウンを設定
-          const conversationDuration = conversation.length * 2000 / simulation.speed;
-          actionTimers.current.set(agent.id, conversationDuration + 1000);
-          actionTimers.current.set(partner.id, conversationDuration + 1000);
-          conversationCooldown.current.set(agent.id, conversationDuration + 5000);
-          conversationCooldown.current.set(partner.id, conversationDuration + 5000);
-
-          setTimeout(() => {
-            updateAgentStatus(agent.id, 'idle');
-            updateAgentStatus(partner.id, 'idle');
-          }, conversationDuration);
+          executeConversation(agent, partner, currentAIMode);
         } else if (action < 0.6) {
           // 移動
           const target = targetPositions.current.get(agent.id);
           if (target && distance(agent.position, target) > 5) {
-            const newPos = moveTowards(agent.position, target, 3 * simulation.speed);
+            const newPos = moveTowards(agent.position, target, 2.5 * simulation.speed);
             updateAgentPosition(agent.id, newPos);
             updateAgentStatus(agent.id, 'walking');
           } else {
@@ -204,36 +294,45 @@ export function useSimulation() {
             targetPositions.current.set(agent.id, newTarget);
             updateAgentStatus(agent.id, 'idle');
           }
-        } else if (action < 0.8) {
+        } else if (action < 0.75) {
           // 思考
           updateAgentStatus(agent.id, 'thinking');
-          const thoughts = [
-            'いい天気だな...',
-            'お腹すいたかも',
-            '何かしたいな',
-            'のんびりするか',
-            '誰かと話したいな',
-          ];
-          const thought = thoughts[Math.floor(Math.random() * thoughts.length)];
 
-          const message: Message = {
-            id: uuidv4(),
-            agentId: agent.id,
-            agentName: agent.persona.name,
-            content: thought,
-            timestamp: new Date(),
-            type: 'thought',
-          };
-          addMessage(message);
+          // AIモードなら非同期でAI思考を試行
+          if (currentAIMode) {
+            generateAIThought(agent).then((thought) => {
+              const content = thought || getRandomThought(agent);
+              const message: Message = {
+                id: uuidv4(),
+                agentId: agent.id,
+                agentName: agent.persona.name,
+                content,
+                timestamp: new Date(),
+                type: 'thought',
+              };
+              addMessage(message);
+            });
+          } else {
+            const thought = getRandomThought(agent);
+            const message: Message = {
+              id: uuidv4(),
+              agentId: agent.id,
+              agentName: agent.persona.name,
+              content: thought,
+              timestamp: new Date(),
+              type: 'thought',
+            };
+            addMessage(message);
+          }
 
-          actionTimers.current.set(agent.id, 3000 / simulation.speed);
+          actionTimers.current.set(agent.id, 4000 / simulation.speed);
           setTimeout(() => {
             updateAgentStatus(agent.id, 'idle');
           }, 3000 / simulation.speed);
         } else {
           // 待機
           updateAgentStatus(agent.id, 'idle');
-          actionTimers.current.set(agent.id, 2000 / simulation.speed);
+          actionTimers.current.set(agent.id, 2500 / simulation.speed);
         }
       });
     }, intervalMs);
@@ -242,53 +341,28 @@ export function useSimulation() {
   }, [
     simulation.isRunning,
     simulation.speed,
-    agents,
     currentPark,
     updateAgentPosition,
     updateAgentStatus,
     addMessage,
-    generateSimpleConversation,
+    executeConversation,
+    generateAIThought,
   ]);
 
-  // AI会話を試行する関数（手動トリガー用）
-  const triggerAIConversation = useCallback(
-    async (agentIds: [string, string]) => {
-      const [agent1, agent2] = agentIds.map((id) => agents.find((a) => a.id === id));
-      if (!agent1 || !agent2) return;
+  return { executeConversation };
+}
 
-      updateAgentStatus(agent1.id, 'talking');
-      updateAgentStatus(agent2.id, 'talking');
-
-      const responses = await generateAIConversation(agent1, agent2);
-
-      if (responses) {
-        responses.forEach(
-          (resp: { agentId: string; speech?: string; thought?: string }, index: number) => {
-            setTimeout(() => {
-              const speaker = agents.find((a) => a.id === resp.agentId);
-              if (speaker && resp.speech) {
-                const message: Message = {
-                  id: uuidv4(),
-                  agentId: resp.agentId,
-                  agentName: speaker.persona.name,
-                  content: resp.speech,
-                  timestamp: new Date(),
-                  type: 'speech',
-                };
-                addMessage(message);
-              }
-            }, index * 2000);
-          }
-        );
-      }
-
-      setTimeout(() => {
-        updateAgentStatus(agent1.id, 'idle');
-        updateAgentStatus(agent2.id, 'idle');
-      }, (responses?.length || 3) * 2000);
-    },
-    [agents, generateAIConversation, updateAgentStatus, addMessage]
-  );
-
-  return { triggerAIConversation };
+// ランダムな思考を生成（ペルソナベース）
+function getRandomThought(agent: Agent): string {
+  const thoughts = [
+    `${agent.persona.goals[0] || '目標'}について考えてる...`,
+    'いい天気だな...',
+    'お腹すいたかも',
+    '誰かと話したいな',
+    `${agent.persona.background.slice(0, 10)}...のことを思い出した`,
+    'のんびりできていいな',
+    '何か面白いことないかな',
+    'ちょっと疲れたかも',
+  ];
+  return thoughts[Math.floor(Math.random() * thoughts.length)];
 }
