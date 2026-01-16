@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '@/stores/useStore';
-import type { Agent, Persona } from '@/types';
+import type { Agent, Persona, LifeSettings } from '@/types';
 
 interface CreateAgentModalProps {
   isOpen: boolean;
@@ -17,7 +17,7 @@ const colorOptions = [
 ];
 
 export default function CreateAgentModal({ isOpen, onClose }: CreateAgentModalProps) {
-  const { addAgent, currentPark } = useStore();
+  const { addAgent, currentLocation, locations } = useStore();
   const [persona, setPersona] = useState<Persona>({
     name: '',
     age: 25,
@@ -25,8 +25,18 @@ export default function CreateAgentModal({ isOpen, onClose }: CreateAgentModalPr
     background: '',
     goals: [''],
     speakingStyle: '',
+    occupation: '',
   });
   const [selectedColor, setSelectedColor] = useState(colorOptions[0]);
+  const [homeLocationId, setHomeLocationId] = useState('residential-meguro');
+  const [hasJob, setHasJob] = useState(false);
+  const [workLocationId, setWorkLocationId] = useState('shinjuku-office');
+  const [workStartHour, setWorkStartHour] = useState(9);
+  const [workEndHour, setWorkEndHour] = useState(18);
+
+  // 住宅地の建物を取得
+  const residentialLocations = locations.filter(l => l.type === 'residential');
+  const officeLocations = locations.filter(l => l.type === 'office' || l.type === 'commercial');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,18 +46,41 @@ export default function CreateAgentModal({ isOpen, onClose }: CreateAgentModalPr
       return;
     }
 
+    // ホームロケーションの建物を取得
+    const homeLocation = locations.find(l => l.id === homeLocationId);
+    const homeBuilding = homeLocation?.buildings.find(b => b.type === 'apartment') || homeLocation?.buildings[0];
+
+    // 職場の建物を取得
+    const workLocation = hasJob ? locations.find(l => l.id === workLocationId) : null;
+    const workBuilding = workLocation?.buildings.find(b => b.type === 'office_building') || workLocation?.buildings[0];
+
+    const life: LifeSettings = {
+      homeLocationId,
+      homeBuildingId: homeBuilding?.id || '',
+      workLocationId: hasJob ? workLocationId : undefined,
+      workBuildingId: hasJob ? workBuilding?.id : undefined,
+      workStartHour: hasJob ? workStartHour : undefined,
+      workEndHour: hasJob ? workEndHour : undefined,
+      favoriteSpots: [],
+    };
+
     const newAgent: Agent = {
       id: uuidv4(),
       persona: {
         ...persona,
+        occupation: persona.occupation || (hasJob ? '会社員' : 'フリーランス'),
         goals: persona.goals.filter((g) => g.trim() !== ''),
       },
+      life,
+      currentLocationId: currentLocation.id,
       position: {
-        x: Math.random() * ((currentPark?.width || 800) - 100) + 50,
-        y: Math.random() * ((currentPark?.height || 600) - 100) + 50,
+        x: Math.random() * (currentLocation.width - 100) + 50,
+        y: Math.random() * (currentLocation.height - 100) + 50,
       },
       color: selectedColor,
       status: 'idle',
+      energy: 100,
+      mood: 80,
       createdBy: 'user',
       createdAt: new Date(),
     };
@@ -65,8 +98,11 @@ export default function CreateAgentModal({ isOpen, onClose }: CreateAgentModalPr
       background: '',
       goals: [''],
       speakingStyle: '',
+      occupation: '',
     });
     setSelectedColor(colorOptions[0]);
+    setHomeLocationId('residential-meguro');
+    setHasJob(false);
   };
 
   const addGoal = () => {
@@ -133,6 +169,20 @@ export default function CreateAgentModal({ isOpen, onClose }: CreateAgentModalPr
             </div>
           </div>
 
+          {/* 職業 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              職業
+            </label>
+            <input
+              type="text"
+              value={persona.occupation}
+              onChange={(e) => setPersona((p) => ({ ...p, occupation: e.target.value }))}
+              className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="例: エンジニア、学生、アーティスト"
+            />
+          </div>
+
           {/* カラー選択 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -194,6 +244,84 @@ export default function CreateAgentModal({ isOpen, onClose }: CreateAgentModalPr
               rows={2}
               placeholder="例: 元気で明るい話し方。「〜だよね！」をよく使う。"
             />
+          </div>
+
+          {/* 自宅設定 */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              🏠 自宅
+            </label>
+            <select
+              value={homeLocationId}
+              onChange={(e) => setHomeLocationId(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {residentialLocations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 仕事設定 */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="checkbox"
+                id="hasJob"
+                checked={hasJob}
+                onChange={(e) => setHasJob(e.target.checked)}
+                className="rounded"
+              />
+              <label htmlFor="hasJob" className="text-sm font-medium text-gray-700">
+                💼 仕事がある
+              </label>
+            </div>
+            {hasJob && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">職場</label>
+                  <select
+                    value={workLocationId}
+                    onChange={(e) => setWorkLocationId(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {officeLocations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">出勤時間</label>
+                    <select
+                      value={workStartHour}
+                      onChange={(e) => setWorkStartHour(Number(e.target.value))}
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                    >
+                      {[6, 7, 8, 9, 10, 11].map((h) => (
+                        <option key={h} value={h}>{h}:00</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">退勤時間</label>
+                    <select
+                      value={workEndHour}
+                      onChange={(e) => setWorkEndHour(Number(e.target.value))}
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                    >
+                      {[15, 16, 17, 18, 19, 20, 21, 22].map((h) => (
+                        <option key={h} value={h}>{h}:00</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 目標・興味 */}
