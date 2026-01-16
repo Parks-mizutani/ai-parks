@@ -8,6 +8,7 @@ import AgentPanel from '@/components/AgentPanel';
 import CreateAgentModal from '@/components/CreateAgentModal';
 import { useLifeSimulation } from '@/lib/useLifeSimulation';
 import '@/styles/retro.css';
+import '@/styles/sprites.css';
 
 export default function Home() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);

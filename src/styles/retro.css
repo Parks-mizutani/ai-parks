@@ -319,3 +319,33 @@
   left: 50%;
   transform: translateX(-50%);
 }
+
+/* ========================================
+   追加アニメーション
+   ======================================== */
+
+/* 歩行アニメーション */
+@keyframes walk {
+  0%, 100% { transform: translate(-50%, -100%) translateY(0); }
+  50% { transform: translate(-50%, -100%) translateY(-3px); }
+}
+
+.animate-walk {
+  animation: walk 0.3s infinite;
+}
+
+/* 会話アニメーション */
+@keyframes talk {
+  0%, 100% { transform: translate(-50%, -100%) scale(1); }
+  50% { transform: translate(-50%, -100%) scale(1.02); }
+}
+
+.animate-talk {
+  animation: talk 0.4s infinite;
+}
+
+/* 選択矢印のバウンス */
+@keyframes arrow-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-4px); }
+}
